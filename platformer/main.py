@@ -6,6 +6,8 @@ WIDTH,HEIGHT = 1200, 720
 WINDOW_TITLE = "Platformer"
 TITLE_SCALING = 0.5
 PLAYER_MOVEMENT_SPEED = 5
+GRAVITY = 1
+PLAYER_JUMP_SPEED = 20
 
 
 
@@ -30,37 +32,38 @@ class GameView(arcade.Window):
             
     def __init__(self):
         super().__init__(WIDTH, HEIGHT, WINDOW_TITLE,resizable=False)
-        self.player_texture = arcade.load_texture(":resources:images/animated_characters/female_adventurer/femaleAdventurer_idle.png")
-        self.player_sprite = arcade.Sprite(self.player_texture)
-        self.player_sprite.center_x = 64
-        self.player_sprite.center_y =128
-        self.player_list = arcade.SpriteList()
-        self.player_list.append(self.player_sprite)
-        self.wall_list = arcade.SpriteList(use_spatial_hash=True) # for collision detection
-        # Spatial Hashing is a special algorithm which will make it much more performant, at the cost of being more expensive to move sprites. 
-        # Often see this option enabled on SpriteLists which are not expected to move much, such as walls or a floor.
 
-        self.walls_build()
-        self.background_color = arcade.color.CYAN
-        self.physics_engine = arcade.PhysicsEngineSimple(self.player_sprite, self.wall_list)
+        self.player_texture = None
+        self.player_sprite = None
+        self.player_list = None
         
+        self.wall_list = None     
         
     def on_update(self, delta_time):
             self.physics_engine.update()
     
     def on_key_press(self, key, modifiers):
-                if key == arcade.key.UP or key == arcade.key.W:
-                    self.player_sprite.change_y = PLAYER_MOVEMENT_SPEED
-                elif key == arcade.key.DOWN or key == arcade.key.S:
-                    self.player_sprite.change_y = -PLAYER_MOVEMENT_SPEED
-                elif key == arcade.key.LEFT or key == arcade.key.A:
-                    self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
-                elif key == arcade.key.RIGHT or key == arcade.key.D:
-                    self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+        if key == arcade.key.ESCAPE:
+            self.setup()
+            
+        if key == arcade.key.UP or key == arcade.key.W:
+            if self.physics_engine.can_jump():
+                self.player_sprite.change_y = PLAYER_JUMP_SPEED
+        elif key == arcade.key.DOWN or key == arcade.key.S:
+            self.player_sprite.change_y = -PLAYER_MOVEMENT_SPEED
+        elif key == arcade.key.LEFT or key == arcade.key.A:
+            self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
+        elif key == arcade.key.RIGHT or key == arcade.key.D:
+            self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+        
+        
+                    
+                
     
     def on_key_release(self, key, modifiers):
         if key == arcade.key.UP or key == arcade.key.W:
-            self.player_sprite.change_y = 0
+            if self.physics_engine.can_jump():
+                self.player_sprite.change_y = PLAYER_JUMP_SPEED
         elif key == arcade.key.DOWN or key == arcade.key.S:
             self.player_sprite.change_y = 0
         elif key == arcade.key.LEFT or key == arcade.key.A:
@@ -71,7 +74,23 @@ class GameView(arcade.Window):
     
     def setup(self):
         # game setup and call it to restart the game
-        pass
+        self.player_texture = arcade.load_texture(":resources:images/animated_characters/female_adventurer/femaleAdventurer_idle.png")
+        self.player_sprite = arcade.Sprite(self.player_texture)
+        self.player_sprite.center_x = 64
+        self.player_sprite.center_y = 128
+        self.player_list = arcade.SpriteList() 
+        # for collision detection
+        # Spatial Hashing is a special algorithm which will make it much more performant, at the cost of being more expensive to move sprites. 
+        # Often see this option enabled on SpriteLists which are not expected to move much, such as walls or a floor.
+        self.player_list.append(self.player_sprite)
+        
+        self.wall_list = arcade.SpriteList(use_spatial_hash=True)
+        self.walls_build()
+        
+        self.physics_engine = arcade.PhysicsEnginePlatformer(self.player_sprite, walls=self.wall_list, 
+                                                             gravity_constant=GRAVITY)
+        self.background_color = arcade.color.CYAN
+        
     def on_draw(self):
         """Render the screen"""
         # ensures clean slate
