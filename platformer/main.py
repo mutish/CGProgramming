@@ -5,6 +5,7 @@ import random
 WIDTH,HEIGHT = 1200, 720
 WINDOW_TITLE = "Platformer"
 TITLE_SCALING = 0.5
+COIN_SCALING = 0.5
 PLAYER_MOVEMENT_SPEED = 5
 GRAVITY = 1
 PLAYER_JUMP_SPEED = 20
@@ -29,6 +30,13 @@ class GameView(arcade.Window):
         #     wall.center_x = x
         #     wall.center_y = 256
         #     self.wall_list.append(wall)
+        
+    def coins_build(self):
+        for x in range(128, 1250, 256):
+            coin = arcade.Sprite(":resources:images/items/coinGold.png", scale=COIN_SCALING)
+            coin.center_x = x
+            coin.center_y = 96
+            self.coin_list.append(coin)
             
     def __init__(self):
         super().__init__(WIDTH, HEIGHT, WINDOW_TITLE,resizable=False)
@@ -37,10 +45,29 @@ class GameView(arcade.Window):
         self.player_sprite = None
         self.player_list = None
         
-        self.wall_list = None     
+        self.wall_list = None   
+        self.camera = None  
+        self.coin_list = None
+        
+        # these are static assests, so no need to set them to None
+        self.collect_coin_sound = arcade.load_sound(":resources:sounds/coin1.wav")
+        self.jump_sound = arcade.load_sound(":resources:sounds/jump1.wav")
+        
+        self.gui_camera = None
+        self.score = 0
+        self.score_text = None
         
     def on_update(self, delta_time):
             self.physics_engine.update()
+            self.camera.position = self.player_sprite.position
+            
+            # for the player to interact with the coins in the game
+            coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.coin_list)
+            for coin in coin_hit_list:
+                coin.remove_from_sprite_lists()
+                arcade.play_sound(self.collect_coin_sound)
+                self.score += 75
+                self.score_text.text = f"Score: {self.score}"
     
     def on_key_press(self, key, modifiers):
         if key == arcade.key.ESCAPE:
@@ -49,6 +76,7 @@ class GameView(arcade.Window):
         if key == arcade.key.UP or key == arcade.key.W:
             if self.physics_engine.can_jump():
                 self.player_sprite.change_y = PLAYER_JUMP_SPEED
+                arcade.play_sound(self.jump_sound)
         elif key == arcade.key.DOWN or key == arcade.key.S:
             self.player_sprite.change_y = -PLAYER_MOVEMENT_SPEED
         elif key == arcade.key.LEFT or key == arcade.key.A:
@@ -86,7 +114,15 @@ class GameView(arcade.Window):
         
         self.wall_list = arcade.SpriteList(use_spatial_hash=True)
         self.walls_build()
+        self.camera = arcade.Camera2D()
+        self.coin_list = arcade.SpriteList(use_spatial_hash=True) # whether coins move or not.
+        self.coins_build()
         
+        self.gui_camera = arcade.Camera2D()
+        self.score = 0
+        self.score_text =  arcade.Text(f"Score:{self.score}", x=16, y=HEIGHT-32, color=arcade.color.BLACK, font_size=18)
+        
+         
         self.physics_engine = arcade.PhysicsEnginePlatformer(self.player_sprite, walls=self.wall_list, 
                                                              gravity_constant=GRAVITY)
         self.background_color = arcade.color.CYAN
@@ -96,8 +132,12 @@ class GameView(arcade.Window):
         # ensures clean slate
         self.clear()
         # code to draw other things here
+        self.camera.use()
         self.player_list.draw()
         self.wall_list.draw()
+        self.coin_list.draw()
+        self.gui_camera.use()
+        self.score_text.draw()
         
 def main():
     window = GameView()
