@@ -12,62 +12,91 @@ PLAYER_JUMP_SPEED = 20
 
 
 
-class GameView(arcade.Window):
-    def walls_build(self):
-        for x in range(0, 1250, 64):
-            wall = arcade.Sprite(":resources:images/tiles/grassMid.png",scale=TITLE_SCALING)
-            wall.center_x = x
-            wall.center_y = 32
-            self.wall_list.append(wall)
-        coordinate_list = [[512, 96],[256,96], [768,96]]
-        for coordinate in coordinate_list:
-            wall = arcade.Sprite(":resources:images/tiles/boxCrate_double.png", scale=TITLE_SCALING)
-            wall.position = coordinate
-            self.wall_list.append(wall)
-            
-        # for x in range(128,1000, 256):
-        #     wall= arcade.Sprite(":resources:images/tiles/boxCrate_double.png", scale=TITLE_SCALING)
-        #     wall.center_x = x
-        #     wall.center_y = 256
-        #     self.wall_list.append(wall)
-        
-    def coins_build(self):
-        for x in range(128, 1250, 256):
-            coin = arcade.Sprite(":resources:images/items/coinGold.png", scale=COIN_SCALING)
-            coin.center_x = x
-            coin.center_y = 96
-            self.coin_list.append(coin)
-            
+class GameView(arcade.Window):    
     def __init__(self):
-        super().__init__(WIDTH, HEIGHT, WINDOW_TITLE,resizable=False)
-
+        super().__init__(WIDTH, HEIGHT, WINDOW_TITLE)
+        # Variable to hold our texture for our player
         self.player_texture = None
-        self.player_sprite = None
-        self.player_list = None
-        
-        self.wall_list = None   
+        # Separate variable that holds the player sprite
+        self.player_sprite = None 
+        self.tile_map = None
+        self.scene =  None
         self.camera = None  
-        self.coin_list = None
+        self.gui_camera = None
+        self.score = 0
+        self.score_text = None
+        self.reset_score = True
+        
+        self.end_of_map=0 # right edge of map
+        self.level=1 # level number to load
+        
         
         # these are static assests, so no need to set them to None
         self.collect_coin_sound = arcade.load_sound(":resources:sounds/coin1.wav")
         self.jump_sound = arcade.load_sound(":resources:sounds/jump1.wav")
+        self.gameover_sound = arcade.load_sound(":resources:sounds/gameover1.wav")
+          
+    def setup(self):
+        # game setup and call it to restart the game
+        layout_options = {
+            "Platforms":{
+                "use_spatial_hash": True
+            }
+        }
+        self.tile_map = arcade.load_tilemap(f":resources:tiled_maps/map2_level_{self.level}.json", scaling=TITLE_SCALING, layer_options=layout_options)
+        self.end_of_map = (self.tile_map.width * self.tile_map.tile_width) * self.tile_map.scaling
+        # Create scene from tilemap 
+        self.scene = arcade.Scene.from_tilemap(self.tile_map)
+        self.scene.add_sprite_list_after("Player","Foreground")
+        self.player_texture = arcade.load_texture(":resources:images/animated_characters/female_adventurer/femaleAdventurer_idle.png")
+        self.player_sprite = arcade.Sprite(self.player_texture)
+        self.player_sprite.center_x = 64
+        self.player_sprite.center_y = 128
+        self.scene.add_sprite("Player", self.player_sprite)
+        # for collision detection
+        # Spatial Hashing is a special algorithm which will make it much more performant, at the cost of being more expensive to move sprites. 
+        # Often see this option enabled on SpriteLists which are not expected to move much, such as walls or a floor.
+        # self.player_list.append(self.player_sprite)
         
-        self.gui_camera = None
+        self.physics_engine = arcade.PhysicsEnginePlatformer(self.player_sprite, walls=self.scene["Platforms"], 
+                                                             gravity_constant=GRAVITY)
+        self.camera = arcade.Camera2D()
+        self.gui_camera = arcade.Camera2D()
         self.score = 0
-        self.score_text = None
-        
+        self.score_text =  arcade.Text(f"Score:{self.score}", x=16, y=HEIGHT-32, color=arcade.color.BLACK, font_size=18)
+        self.background_color = arcade.color.CORNFLOWER_BLUE
+    
+    
+    def on_draw(self):
+        """Render the screen"""
+        # ensures clean slate
+        self.clear()
+        # code to draw other things here
+        self.camera.use()
+        self.scene.draw()
+        self.gui_camera.use()
+        self.score_text.draw()
+    
     def on_update(self, delta_time):
-            self.physics_engine.update()
-            self.camera.position = self.player_sprite.position
+        """Movement and Game Logic"""
+        self.physics_engine.update()
+        
             
-            # for the player to interact with the coins in the game
-            coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.coin_list)
-            for coin in coin_hit_list:
-                coin.remove_from_sprite_lists()
-                arcade.play_sound(self.collect_coin_sound)
-                self.score += 75
-                self.score_text.text = f"Score: {self.score}"
+        # for the player to interact with the coins in the game
+        coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
+        for coin in coin_hit_list:
+            coin.remove_from_sprite_lists()
+            arcade.play_sound(self.collect_coin_sound)
+            self.score += 75
+            self.score_text.text = f"Score: {self.score}"
+        if self.player_sprite.center_x >= self.end_of_map:
+            self.level += 1
+            self.setup()
+        self.camera.position = self.player_sprite.position
+        
+        if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Don't Touch"]):
+            arcade.play_sound(self.gameover_sound)
+            self.setup()
     
     def on_key_press(self, key, modifiers):
         if key == arcade.key.ESCAPE:
@@ -84,10 +113,6 @@ class GameView(arcade.Window):
         elif key == arcade.key.RIGHT or key == arcade.key.D:
             self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
         
-        
-                    
-                
-    
     def on_key_release(self, key, modifiers):
         if key == arcade.key.UP or key == arcade.key.W:
             if self.physics_engine.can_jump():
@@ -100,44 +125,8 @@ class GameView(arcade.Window):
             self.player_sprite.change_x = 0
             
     
-    def setup(self):
-        # game setup and call it to restart the game
-        self.player_texture = arcade.load_texture(":resources:images/animated_characters/female_adventurer/femaleAdventurer_idle.png")
-        self.player_sprite = arcade.Sprite(self.player_texture)
-        self.player_sprite.center_x = 64
-        self.player_sprite.center_y = 128
-        self.player_list = arcade.SpriteList() 
-        # for collision detection
-        # Spatial Hashing is a special algorithm which will make it much more performant, at the cost of being more expensive to move sprites. 
-        # Often see this option enabled on SpriteLists which are not expected to move much, such as walls or a floor.
-        self.player_list.append(self.player_sprite)
-        
-        self.wall_list = arcade.SpriteList(use_spatial_hash=True)
-        self.walls_build()
-        self.camera = arcade.Camera2D()
-        self.coin_list = arcade.SpriteList(use_spatial_hash=True) # whether coins move or not.
-        self.coins_build()
-        
-        self.gui_camera = arcade.Camera2D()
-        self.score = 0
-        self.score_text =  arcade.Text(f"Score:{self.score}", x=16, y=HEIGHT-32, color=arcade.color.BLACK, font_size=18)
-        
-         
-        self.physics_engine = arcade.PhysicsEnginePlatformer(self.player_sprite, walls=self.wall_list, 
-                                                             gravity_constant=GRAVITY)
-        self.background_color = arcade.color.CYAN
-        
-    def on_draw(self):
-        """Render the screen"""
-        # ensures clean slate
-        self.clear()
-        # code to draw other things here
-        self.camera.use()
-        self.player_list.draw()
-        self.wall_list.draw()
-        self.coin_list.draw()
-        self.gui_camera.use()
-        self.score_text.draw()
+    
+
         
 def main():
     window = GameView()
